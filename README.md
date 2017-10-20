@@ -12,5 +12,5 @@ Useful references:
 
 https://github.com/Lasagne/Recipes/blob/master/examples/variational_autoencoder/variational_autoencoder.py
 
-
+* https://arxiv.org/pdf/1606.05908.pdfs
 
