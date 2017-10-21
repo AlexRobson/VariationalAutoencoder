@@ -1,5 +1,8 @@
 # Load the data into memory
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 from torchvision import datasets, transforms
 
 
@@ -25,7 +28,9 @@ def vae_setup(params, datadir="../"):
 
 	return train_loader, test_loader
 
-def encoder():
+
+	# Taken from https://github.com/pytorch/examples/blob/master/mnist/main.py
+class Encoder(nn.Module):
 	"""
 	This function is the neural networks encoding the (parameters of) the distribution that represents
 	q(z | x). This is our 'oracle' distribution; a variational posterior. It is an approximate distribution to
@@ -37,22 +42,48 @@ def encoder():
 	This is set-up as if a Normal distribution because it provides nice properties for when
 	we arrive at the loss function (squared error), and thus the output of this network is a MU and SIGMA.
 
-	These have a size of BATCH_SIZE *
-
-
+	These each have a size of BATCH_SIZE * N_LATENTS
 
 	:return: \mu, \sigma
 	"""
-	pass
-	return MU, SIGMAs
+
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+        self.fc1 = nn.Linear(320, 50)
+		self.fc2 = nn.Linear(50, 2)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = x.view(-1, 320)
+        x = F.relu(self.fc1(x))
+		mu = F.relu(self.fc2(x))
+        sigma = F.relu(self.fc2(x))
+
+		return mu, sigma
+
 
 def sample():
 	"""
-	This function is defined explicetly to capture the sampling involved when passing the distribution of the
-	 variation posterior outputted from the encoder to the decoder.
+	This function is defined explicetly to capture the sampling involved
+	at the output of the encoder. The output of the encoder is Q(z | X). However, when
+	following through the equations in variational autoencoders, the equation that represent
+	log P(x) is built from two terms; a KullBack-Leibler distance of KL(Q(z | X) || P(z) )
+	and a second term which is the built from an expectation over E{Q_z}[log P(X | z)].
+	This stochastic layer captures this expectation, by sampling the output of Q(z | X).
 
+	The secondi mportant aspect of this layer is the reparameterisation trick. In order to
+	backprop through the output of the encoder, we need to take derivatives of N(MU, SIGMA),
+	which is our estimate for Q(z | X). Therefore, we reparameterise. Instead of sampling
+	from z ~ N(MU, SIGMA) we sample from \eps ~ N(0, 1) and then: z = MU + SIGMA * eps
 	"""
-	pass
+
+	# Sample from N(0, 1)
+
+	#
+
 
 def decoder():
 	"""
@@ -74,9 +105,3 @@ def loss():
 if __name__=='__main__':
 	params = {'batch_size': 10, 'test_batch_size': 10}
 	loaders = vae_setup(params)
-
-
-
-
-
-
