@@ -1,6 +1,7 @@
 # Load the data into memory
 import torch
 import torch.nn as nn
+import numpy as np
 import torch.nn.functional as F
 
 from torchvision import datasets, transforms
@@ -11,9 +12,9 @@ def vae_setup(params, datadir="../"):
 	train_loader = torch.utils.data.DataLoader(
 		datasets.MNIST(
 			'../data', train=True, download=True,
-		    transform=transforms.Compose([
-		    transforms.ToTensor(),
-		    transforms.Normalize((0.1307,), (0.3081,))
+			transform=transforms.Compose([
+			transforms.ToTensor(),
+			transforms.Normalize((0.1307,), (0.3081,))
 			])),
 		batch_size=params["batch_size"], shuffle=True
 		)
@@ -36,7 +37,7 @@ class Encoder(nn.Module):
 	q(z | x). This is our 'oracle' distribution; a variational posterior. It is an approximate distribution to
 	represent the real posterior p(z | x) the distribution about our latent variables of our data x.
 	The optimal q is one that minimises the Kullback-Leibler distance:
-	    q*(z | x, \theta) = argmin_{\theta}{KL(q(z | x, \theta) || p(z | x)}
+		q*(z | x, \theta) = argmin_{\theta}{KL(q(z | x, \theta) || p(z | x)}
 
 	It is a neural network that outputs the parameters \mu (x) and \sigma (x) that represent the distribution q(z | x)
 	This is set-up as if a Normal distribution because it provides nice properties for when
@@ -47,27 +48,27 @@ class Encoder(nn.Module):
 	:return: \mu, \sigma
 	"""
 
-    def __init__(self):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.fc1 = nn.Linear(320, 50)
+	def __init__(self):
+		super(Encoder, self).__init__()
+		self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+		self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+		self.fc1 = nn.Linear(320, 50)
 		self.fc2 = nn.Linear(50, 2)
 
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = x.view(-1, 320)
-        x = F.relu(self.fc1(x))
+	def forward(self, x):
+		x = F.relu(self.conv1(x))
+		x = F.relu(self.conv2(x))
+		x = x.view(-1, 320)
+		x = F.relu(self.fc1(x))
 		mu = F.relu(self.fc2(x))
-        sigma = F.relu(self.fc2(x))
+		sigma = F.relu(self.fc2(x))
 
 		return mu, sigma
 
 
-def sample():
+class Sampler(nn.Module):
 	"""
-	This function is defined explicetly to capture the sampling involved
+	This function is defined explicstly to capture the sampling involved
 	at the output of the encoder. The output of the encoder is Q(z | X). However, when
 	following through the equations in variational autoencoders, the equation that represent
 	log P(x) is built from two terms; a KullBack-Leibler distance of KL(Q(z | X) || P(z) )
@@ -79,29 +80,56 @@ def sample():
 	which is our estimate for Q(z | X). Therefore, we reparameterise. Instead of sampling
 	from z ~ N(MU, SIGMA) we sample from \eps ~ N(0, 1) and then: z = MU + SIGMA * eps
 	"""
+	def __init__(self):
+		pass
 
-	# Sample from N(0, 1)
+	def forward(self, mu, sigma):
+		# Sample from N(0, 1)
+		s = torch.distributions.normal(torch.zeros(mu.shape), torch.eye(mu.shape[0]))
+		Z = mu + torch.mm(s, sigma)
+		return Z
 
-	#
-
-
-def decoder():
+class Decoder(nn.Module):
 	"""
 	This function is the network decoding that represents q(z | x) back into our observable space.
 	Importantly, the input to this decoder step is a sample from ~N(MU, SIGMA),the output from the encoder.
 
 	It provides a reconstruction of the observables
 
-
 	:return:
 	"""
-	pass
+	def __init__(self):
+		super(Decoder, self).__init__()
+		self.fc2 = nn.Linear(50, 2)
+		self.fc1 = nn.Linear(320, 50)
+		self.conv2 = nn.ConvTranspose2d(10, 20, kernel_size=5)
+		self.conv1 = nn.ConvTranspose2d(1, 10, kernel_size=5)
+
+	def forward(self, x):
+		x = F.relu(self.fc2(x))
+		x = F.relu(self.fc1(x))
+		x = F.relu(self.conv2(x))
+		x = F.relu(self.conv1(x))
+
+		return x
+
 
 def loss():
 	pass
 
 
+def model():
+	encoder = Encoder()
+	sampler = Sampler()
+	decoder = Decoder()
+
+
+# TESTING
+
 
 if __name__=='__main__':
 	params = {'batch_size': 10, 'test_batch_size': 10}
-	loaders = vae_setup(params)
+	train_loader, test_loader = vae_setup(params)
+	model()
+
+
