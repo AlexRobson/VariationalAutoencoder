@@ -85,8 +85,8 @@ class Sampler(nn.Module):
 
 	def forward(self, mu, sigma):
 		# Sample from N(0, 1)
-		s = torch.distributions.normal(torch.zeros(mu.shape), torch.eye(mu.shape[0]))
-		Z = mu + torch.mm(s, sigma)
+		s = torch.normal(torch.zeros(mu.shape), torch.ones(mu.shape))
+		Z = mu + s * sigma
 		return Z
 
 class Decoder(nn.Module):
