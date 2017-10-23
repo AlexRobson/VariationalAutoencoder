@@ -6,6 +6,8 @@ import torch.nn.functional as F
 
 from torchvision import datasets, transforms
 
+N_LATENT = 8
+
 
 def vae_setup(params, datadir="../"):
 	# Taken from https://github.com/pytorch/examples/blob/master/mnist/main.py
@@ -53,7 +55,7 @@ class Encoder(nn.Module):
 		self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
 		self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
 		self.fc1 = nn.Linear(320, 50)
-		self.fc2 = nn.Linear(50, 2)
+		self.fc2 = nn.Linear(50, N_LATENT)
 
 	def forward(self, x):
 		x = F.relu(self.conv1(x))
