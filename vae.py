@@ -52,15 +52,19 @@ class Encoder(nn.Module):
 
 	def __init__(self):
 		super(Encoder, self).__init__()
-		self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-		self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-		self.fc1 = nn.Linear(320, 50)
+		self.conv1 = nn.Conv2d(1, 5, kernel_size=5)
+		self.conv2 = nn.Conv2d(5, 10, kernel_size=5)
+		self.fc1 = nn.Linear(10*20*20, 50)
 		self.fc2 = nn.Linear(50, N_LATENT)
 
+
 	def forward(self, x):
+		print(x.size())
 		x = F.relu(self.conv1(x))
+		print(x.size())
 		x = F.relu(self.conv2(x))
-		x = x.view(-1, 320)
+		print(x.size())
+		x = x.view(-1, 10*20*20)
 		x = F.relu(self.fc1(x))
 		mu = F.relu(self.fc2(x))
 		sigma = F.relu(self.fc2(x))
@@ -102,22 +106,32 @@ class Decoder(nn.Module):
 	"""
 	def __init__(self):
 		super(Decoder, self).__init__()
-		self.fc2 = nn.Linear(50, 2)
-		self.fc1 = nn.Linear(320, 50)
-		self.conv2 = nn.ConvTranspose2d(10, 20, kernel_size=5)
-		self.conv1 = nn.ConvTranspose2d(1, 10, kernel_size=5)
+		self.fc2 = nn.Linear(N_LATENT, 50)
+		self.fc1 = nn.Linear(50, 10*20*20)
+		self.conv2 = nn.ConvTranspose2d(10, 5, kernel_size=5)
+		self.conv1 = nn.ConvTranspose2d(5, 1, kernel_size=5)
 
 	def forward(self, x):
 		x = F.relu(self.fc2(x))
 		x = F.relu(self.fc1(x))
+		x = x.view(-1, 10, 20, 20)
 		x = F.relu(self.conv2(x))
 		x = F.relu(self.conv1(x))
 
 		return x
 
 
-def loss():
+def loss(X, X_dash):
+	"""
+	The loss in the variational autoencoder is best expressed as the decomposition of two terms. The first can be
+	described as a 'reconstruction error'. This is akin to the standard autoencoder where the recreation of the
+	observables	X_dash, at the output of the decoder, relative to the input observables, X, is calculated.
+	The second is the Kullback-Leibler regulariser KL(q(z | X) || p(z). This is the Kullback-leibler divergence
+	between the
+	:return:
+	"""
 	pass
+
 
 
 def model():
@@ -127,8 +141,6 @@ def model():
 
 
 # TESTING
-
-
 if __name__=='__main__':
 	params = {'batch_size': 10, 'test_batch_size': 10}
 	train_loader, test_loader = vae_setup(params)
