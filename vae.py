@@ -121,15 +121,34 @@ class Decoder(nn.Module):
 		return x
 
 
-def loss(X, X_dash):
+def loss(x, x_dash):
 	"""
 	The loss in the variational autoencoder is best expressed as the decomposition of two terms. The first can be
 	described as a 'reconstruction error'. This is akin to the standard autoencoder where the recreation of the
 	observables	X_dash, at the output of the decoder, relative to the input observables, X, is calculated.
 	The second is the Kullback-Leibler regulariser KL(q(z | X) || p(z). This is the Kullback-leibler divergence
-	between the encoder distribution q(z  | X), and the prior p(z).
+	between the encoder distribution q(z  | X), and the prior p(z). The first term is 'the expectation, over the
+	encoders distributions, of the log likelihood of the i-th datapoint'.
+
+	The KL term can be pulled straight from wikipedia:
+	https://en.wikipedia.org/wiki/Kullback–Leibler_divergence#Multivariate_normal_distributions
+
+	The log-likliehood term is more complicated as it involves an expectation through a Monte Carlo estimate of the
+	log-likelihood p(x | z)
+
+	A likelihood p(x) can be modelled by considered the image data as a series of Bernoilli trials of success (white) = p
+	and failure (black) = 1 - p.
+
+
+	x: (N_BATCHSIZE, 28, 28)
+	x_dash = (N_BATCHSIZE, 28, 28)
+
+
+
 	:return:
 	"""
+	nn.functional.binary_cross_entropy(x_dash, x)
+
 	pass
 
 
