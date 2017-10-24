@@ -127,7 +127,7 @@ def loss(X, X_dash):
 	described as a 'reconstruction error'. This is akin to the standard autoencoder where the recreation of the
 	observables	X_dash, at the output of the decoder, relative to the input observables, X, is calculated.
 	The second is the Kullback-Leibler regulariser KL(q(z | X) || p(z). This is the Kullback-leibler divergence
-	between the
+	between the encoder distribution q(z  | X), and the prior p(z).
 	:return:
 	"""
 	pass
