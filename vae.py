@@ -116,7 +116,7 @@ class Decoder(nn.Module):
 		x = F.relu(self.fc1(x))
 		x = x.view(-1, 10, 20, 20)
 		x = F.relu(self.conv2(x))
-		x = F.relu(self.conv1(x))
+		x = F.sigmoid(self.conv1(x)) # Treat the output as a probability P(x | Z)
 
 		return x
 
@@ -147,9 +147,14 @@ def loss(x, x_dash):
 
 	:return:
 	"""
-	nn.functional.binary_cross_entropy(x_dash, x)
+
+	# Shape: x_dash: (batch, sample, 28, 28)
+
+	torch.mean(nn.functional.binary_cross_entropy(x_dash, x), 2)
 
 	pass
+
+def
 
 
 
