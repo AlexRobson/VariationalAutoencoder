@@ -14,3 +14,7 @@ https://github.com/Lasagne/Recipes/blob/master/examples/variational_autoencoder/
 
 * https://arxiv.org/pdf/1606.05908.pdfs
 
+* Useful links:
+
+https://medium.com/towards-data-science/teaching-a-variational-autoencoder-vae-to-draw-mnist-characters-978675c95776
+* https://ermongroup.github.io/cs228-notes/extras/vae/
