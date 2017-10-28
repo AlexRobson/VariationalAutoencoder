@@ -2,7 +2,7 @@ import unittest
 import torch
 from torch.autograd import Variable
 from vae import *
-
+import numpy as np
 
 
 class TestVAE(unittest.TestCase):
@@ -51,6 +51,18 @@ class TestVAE(unittest.TestCase):
 		sigma = torch.randn(Z_shape)
 		z_sample = S.forward(mu, sigma)
 		self.assertSequenceEqual(tuple(z_sample.shape), Z_shape)
+
+	def test_Loss(self):
+		dims = (27, 1, 28, 28)
+		nlatent = 8
+		params = {'batch_size': dims[0], 'test_batch_size': dims[0]}
+		train_loader, test_loader = vae_setup(params)
+		X = Variable(next(iter(train_loader))[0])
+		X_dash = torch.rand(dims)
+		q_mu = torch.rand((dims[0], nlatent))
+		q_sigma = torch.rand(dims[0], nlatent)
+		loss(X, X_dash, q_mu, q_sigma)
+
 
 
 

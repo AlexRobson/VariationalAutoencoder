@@ -121,14 +121,14 @@ class Decoder(nn.Module):
 		return x
 
 
-def loss(x, x_dash):
+def loss(x, x_dash, q_mu, q_sigma):
 	"""
 	The loss in the variational autoencoder is best expressed as the decomposition of two terms. The first can be
 	described as a 'reconstruction error'. This is akin to the standard autoencoder where the recreation of the
 	observables	X_dash, at the output of the decoder, relative to the input observables, X, is calculated.
 	The second is the Kullback-Leibler regulariser KL(q(z | X) || p(z). This is the Kullback-leibler divergence
 	between the encoder distribution q(z  | X), and the prior p(z). The first term is 'the expectation, over the
-	encoders distributions, of the log likelihood of the i-th datapoint'.
+	encoders distributions, of the log likelihood of the i-th observation'.
 
 	The KL term can be pulled straight from wikipedia:
 	https://en.wikipedia.org/wiki/Kullback–Leibler_divergence#Multivariate_normal_distributions
@@ -137,26 +137,22 @@ def loss(x, x_dash):
 	log-likelihood p(x | z)
 
 	A likelihood p(x) can be modelled by considered the image data as a series of Bernoilli trials of success (white) = p
-	and failure (black) = 1 - p.
-
+	and failure (black) = 1 - p. This specifies how to encoder log(p(X_i | z)). In this case, p(X_i | z) = p^y*(1-p)^(1-y).
+	The log-term of this is then the cross-entropy: y * log(p) + (1-y)*log(1-p). Y here is the correct label, i.e. X[i,j]
+	for the i, jth pixel, and p is the probability of the i,jth pixel.
 
 	x: (N_BATCHSIZE, 28, 28)
 	x_dash = (N_BATCHSIZE, 28, 28)
 
-
-
-	:return:
+	:return: loss
 	"""
-
+    # torch.potrf
 	# Shape: x_dash: (batch, sample, 28, 28)
-
-	torch.mean(nn.functional.binary_cross_entropy(x_dash, x), 2)
-
-	pass
-
-def
-
-
+	Ndim = q_mu.shape[1]
+	reconstruction = torch.log(torch.mean(nn.functional.binary_cross_entropy(x_dash, x), 2))
+	KL = 0.5 * (torch.trace(q_sigma) + torch.transpose(q_mu) * torch.eye() * q_mu - Ndim - torch.log(torch.potrf(q_sigma).diag().prod()))
+	loss = reconstruction - KL
+	return loss
 
 def model():
 	encoder = Encoder()
