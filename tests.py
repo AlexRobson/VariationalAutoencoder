@@ -69,10 +69,14 @@ class TestVAE(unittest.TestCase):
 
 	def test_Model(self):
 
+		encoder = Encoder()
 		params = {'batch_size': 23, 'test_batch_size': 23}
 		train_loader, test_loader = vae_setup(params)
 		X = Variable(next(iter(train_loader))[0])
 		X_dash = model(X)
+		q_mu, q_sigma = encoder.forward(X)
+		l = loss(X, X_dash, q_mu, q_sigma)
+
 
 
 if __name__ == '__main__':

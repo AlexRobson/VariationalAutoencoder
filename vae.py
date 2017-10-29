@@ -67,8 +67,8 @@ class Encoder(nn.Module):
 		#print(x.size())
 		x = x.view(-1, 10*20*20)
 		x = F.relu(self.fc1(x))
-		mu = F.relu(self.fc2(x))
-		sigma = F.relu(self.fc2(x))
+		mu = self.fc2(x)
+		sigma = torch.exp(self.fc2(x))
 
 		return mu, sigma
 
