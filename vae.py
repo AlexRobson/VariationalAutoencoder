@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
+from torch.autograd import Variable
 
 from torchvision import datasets, transforms
 
@@ -59,11 +60,11 @@ class Encoder(nn.Module):
 
 
 	def forward(self, x):
-		print(x.size())
+		#print(x.size())
 		x = F.relu(self.conv1(x))
-		print(x.size())
+		#print(x.size())
 		x = F.relu(self.conv2(x))
-		print(x.size())
+		#print(x.size())
 		x = x.view(-1, 10*20*20)
 		x = F.relu(self.fc1(x))
 		mu = F.relu(self.fc2(x))
@@ -89,9 +90,10 @@ class Sampler(nn.Module):
 	def __init__(self):
 		pass
 
-	def forward(self, mu, sigma):
+	def forward(self, params):
+		mu, sigma = params
 		# Sample from N(0, 1)
-		s = torch.normal(torch.zeros(mu.shape), torch.ones(mu.shape))
+		s = Variable(torch.normal(torch.zeros(mu.data.shape), torch.ones(mu.data.shape)))
 		Z = mu + s * sigma
 		return Z
 
@@ -144,20 +146,23 @@ def loss(x, x_dash, q_mu, q_sigma):
 	x: (N_BATCHSIZE, 28, 28)
 	x_dash = (N_BATCHSIZE, 28, 28)
 
+	The derivation for this can be seen in Appendix 2 of the Dietrich paper.
+
 	:return: loss
 	"""
     # torch.potrf
 	# Shape: x_dash: (batch, sample, 28, 28)
-	Ndim = q_mu.shape[1]
-	reconstruction = torch.log(torch.mean(nn.functional.binary_cross_entropy(x_dash, x), 2))
-	KL = 0.5 * (torch.trace(q_sigma) + torch.transpose(q_mu) * torch.eye() * q_mu - Ndim - torch.log(torch.potrf(q_sigma).diag().prod()))
+	Ndim = q_mu.data.shape[1]
+	reconstruction = torch.log(nn.functional.binary_cross_entropy(x_dash, x))
+	KL = 0.5 * torch.sum(1 + q_sigma.pow(2) + q_mu.pow(2) - torch.log(q_sigma.pow(2)), 1)
 	loss = reconstruction - KL
 	return loss
 
-def model():
+def model(X):
 	encoder = Encoder()
 	sampler = Sampler()
 	decoder = Decoder()
+	return decoder.forward(sampler.forward(encoder.forward(X)))
 
 
 # TESTING
@@ -165,5 +170,3 @@ if __name__=='__main__':
 	params = {'batch_size': 10, 'test_batch_size': 10}
 	train_loader, test_loader = vae_setup(params)
 	model()
-
-
