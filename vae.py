@@ -88,7 +88,8 @@ class Sampler(nn.Module):
 	from z ~ N(MU, SIGMA) we sample from \eps ~ N(0, 1) and then: z = MU + SIGMA * eps
 	"""
 	def __init__(self):
-		pass
+		super(Sampler, self).__init__()
+
 
 	def forward(self, params):
 		mu, sigma = params
@@ -123,7 +124,7 @@ class Decoder(nn.Module):
 		return x
 
 
-def loss(x, x_dash, q_mu, q_sigma):
+class VAEloss(nn.Module):
 	"""
 	The loss in the variational autoencoder is best expressed as the decomposition of two terms. The first can be
 	described as a 'reconstruction error'. This is akin to the standard autoencoder where the recreation of the
@@ -150,23 +151,50 @@ def loss(x, x_dash, q_mu, q_sigma):
 
 	:return: loss
 	"""
-    # torch.potrf
-	# Shape: x_dash: (batch, sample, 28, 28)
-	Ndim = q_mu.data.shape[1]
-	reconstruction = torch.log(nn.functional.binary_cross_entropy(x_dash, x))
-	KL = 0.5 * torch.sum(1 + q_sigma.pow(2) + q_mu.pow(2) - torch.log(q_sigma.pow(2)), 1)
-	loss = reconstruction - KL
-	return loss
 
-def model(X):
-	encoder = Encoder()
-	sampler = Sampler()
-	decoder = Decoder()
-	return decoder.forward(sampler.forward(encoder.forward(X)))
+	def __init__(self):
+		super(VAEloss, self).__init__()
+
+
+	def forward(self, X, X_dash, q_mu, q_sigma):
+		Ndim = q_mu.data.shape[1]
+		reconstruction = torch.log(nn.functional.binary_cross_entropy(X_dash, X))
+		KL = 0.5 * torch.sum(1 + q_sigma.pow(2) + q_mu.pow(2) - torch.log(q_sigma.pow(2)), 1)
+		loss = reconstruction - KL
+		return loss
+
+
+
+class Model(nn.Module):
+	def __init__(self):
+		super(Model, self).__init__()
+		self.encoder = Encoder()
+		self.sampler = Sampler()
+		self.decoder = Decoder()
+
+	def forward(self, X):
+		return self.decoder(self.sampler((self.encoder(X))))
+
+
+
+def update(X, model):
+
+	# Perform a forward pass
+	q_mu, q_sigma = model.encoder.forward(X)
+	loss = VAEloss()
+	X_dash = model.forward(X)
+	l = torch.sum(loss(X, X_dash, q_mu, q_sigma))
+
+	model.zero_grad()
+
+
+
+
+
+
 
 
 # TESTING
 if __name__=='__main__':
 	params = {'batch_size': 10, 'test_batch_size': 10}
 	train_loader, test_loader = vae_setup(params)
-	model()
