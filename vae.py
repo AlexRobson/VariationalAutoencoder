@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from torchvision import datasets, transforms
+from torchvision.utils import save_image
 
 N_LATENT = 8
 
@@ -164,7 +165,6 @@ class VAEloss(nn.Module):
 		return loss
 
 
-
 class Model(nn.Module):
 	def __init__(self):
 		super(Model, self).__init__()
@@ -176,25 +176,30 @@ class Model(nn.Module):
 		return self.decoder(self.sampler((self.encoder(X))))
 
 
-
-def update(X, model):
+def update(X, model, loss, opt):
 
 	# Perform a forward pass
-	q_mu, q_sigma = model.encoder.forward(X)
-	loss = VAEloss()
-	X_dash = model.forward(X)
+	q_mu, q_sigma = model.encoder(X)
+	X_dash = model(X)
 	l = torch.sum(loss(X, X_dash, q_mu, q_sigma))
-
-	model.zero_grad()
-
-
-
-
-
+	print(l.data[0])
+	opt.zero_grad()
+	l.backward()
+	opt.step()
 
 
 
 # TESTING
 if __name__=='__main__':
-	params = {'batch_size': 10, 'test_batch_size': 10}
+	params = {'batch_size': 100, 'test_batch_size': 100}
 	train_loader, test_loader = vae_setup(params)
+	model = Model()
+	loss = VAEloss()
+	optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+	for i in range(1000):
+		X = Variable(next(iter(train_loader))[0])
+		X_dash = model(X)
+		save_image(X.data, "./original/output_{0:0>3}.jpg".format(str(i)))
+		save_image(X_dash.data, "./reconstructed/output_{0:0>3}.jpg".format(str(i)))
+		update(X, model, loss, optimizer)
+

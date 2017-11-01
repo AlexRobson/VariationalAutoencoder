@@ -85,22 +85,14 @@ class TestVAE(unittest.TestCase):
 		BS = 23
 		params = {'batch_size': BS, 'test_batch_size': BS}
 		train_loader, test_loader = vae_setup(params)
-		X = Variable(next(iter(train_loader))[0])
 
 		model = Model()
 		loss = VAEloss()
+		optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
 
-		q_mu, q_sigma = model.encoder(X)
-
-		X_dash = model(X)
-		l = torch.sum(loss(X, X_dash, q_mu, q_sigma))
-		model.zero_grad()
-		self.assertIs(len(l), 1)
-
-
-
-
-
+		for i in range(10):
+			X = Variable(next(iter(train_loader))[0])
+			update(X, model, loss, optimizer)
 
 
 if __name__ == '__main__':
