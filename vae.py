@@ -161,7 +161,7 @@ class VAEloss(nn.Module):
 		Ndim = q_mu.data.shape[1]
 		reconstruction = torch.log(nn.functional.binary_cross_entropy(X_dash, X))
 		KL = 0.5 * torch.sum(1 + q_sigma.pow(2) + q_mu.pow(2) - torch.log(q_sigma.pow(2)), 1)
-		loss = reconstruction - KL
+		loss = -(reconstruction - KL)
 		return loss
 
 
@@ -199,7 +199,7 @@ if __name__=='__main__':
 	for i in range(1000):
 		X = Variable(next(iter(train_loader))[0])
 		X_dash = model(X)
-		save_image(X.data, "./original/output_{0:0>3}.jpg".format(str(i)))
-		save_image(X_dash.data, "./reconstructed/output_{0:0>3}.jpg".format(str(i)))
+		save_image(X.data, "./original/output_{0:0>5}.jpg".format(str(i)))
+		save_image(X_dash.data, "./reconstructed/output_{0:0>5}.jpg".format(str(i)))
 		update(X, model, loss, optimizer)
 
