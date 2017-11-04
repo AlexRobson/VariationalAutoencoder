@@ -1,10 +1,10 @@
 # Load the data into memory
 import torch
 import torch.nn as nn
-import numpy as np
+import os
 import torch.nn.functional as F
 from torch.autograd import Variable
-
+import shutil
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
@@ -54,24 +54,26 @@ class Encoder(nn.Module):
 
 	def __init__(self):
 		super(Encoder, self).__init__()
-		self.conv1 = nn.Conv2d(1, 5, kernel_size=5)
-		self.conv2 = nn.Conv2d(5, 10, kernel_size=5)
-		self.fc1 = nn.Linear(10*20*20, 50)
-		self.fc2 = nn.Linear(50, N_LATENT)
+		self.fc1 = nn.Linear(28*28, 512)
+		self.fc2 = nn.Linear(512, 400)
+		self.fc3 = nn.Linear(400, 50)
+		self.fc4 = nn.Linear(50, N_LATENT)
+		self.fc5 = nn.Linear(50, N_LATENT)
 
 
 	def forward(self, x):
-		#print(x.size())
-		x = F.relu(self.conv1(x))
-		#print(x.size())
-		x = F.relu(self.conv2(x))
-		#print(x.size())
-		x = x.view(-1, 10*20*20)
+		x = x.view(-1, 28*28)
 		x = F.relu(self.fc1(x))
-		mu = self.fc2(x)
-		sigma = torch.exp(self.fc2(x))
+		x = x.view(-1, 512)
+		x = F.relu(self.fc2(x))
+		x = F.tanh(self.fc3(x))
+		x = x.view(-1, 50)
+		mu = F.tanh(self.fc4(x))
+		logsigma2 = F.tanh(self.fc5(x))
+		mu = mu.view(-1, N_LATENT)
+		logsigma2 = logsigma2.view(-1, N_LATENT)
 
-		return mu, sigma
+		return mu, logsigma2
 
 
 class Sampler(nn.Module):
@@ -93,10 +95,10 @@ class Sampler(nn.Module):
 
 
 	def forward(self, params):
-		mu, sigma = params
+		mu, logsigma2 = params
 		# Sample from N(0, 1)
 		s = Variable(torch.normal(torch.zeros(mu.data.shape), torch.ones(mu.data.shape)))
-		Z = mu + s * sigma
+		Z = mu + s * torch.exp(0.5 * logsigma2)
 		return Z
 
 class Decoder(nn.Module):
@@ -104,23 +106,19 @@ class Decoder(nn.Module):
 	This function is the network decoding that represents q(z | x) back into our observable space.
 	Importantly, the input to this decoder step is a sample from ~N(MU, SIGMA),the output from the encoder.
 
-	It provides a reconstruction of the observables
+	It provides a reconstruction of the observables. Model this as a Bernouilli distribution
 
 	:return:
 	"""
 	def __init__(self):
 		super(Decoder, self).__init__()
-		self.fc2 = nn.Linear(N_LATENT, 50)
-		self.fc1 = nn.Linear(50, 10*20*20)
-		self.conv2 = nn.ConvTranspose2d(10, 5, kernel_size=5)
-		self.conv1 = nn.ConvTranspose2d(5, 1, kernel_size=5)
+		self.fc1 = nn.Linear(N_LATENT, 400)
+		self.fc2 = nn.Linear(400, 28*28)
 
 	def forward(self, x):
-		x = F.relu(self.fc2(x))
-		x = F.relu(self.fc1(x))
-		x = x.view(-1, 10, 20, 20)
-		x = F.relu(self.conv2(x))
-		x = F.sigmoid(self.conv1(x)) # Treat the output as a probability P(x | Z)
+		x = F.tanh(self.fc1(x))
+		x = F.sigmoid(self.fc2(x))
+		x = x.view(-1, 1, 28, 28)
 
 		return x
 
@@ -157,11 +155,18 @@ class VAEloss(nn.Module):
 		super(VAEloss, self).__init__()
 
 
-	def forward(self, X, X_dash, q_mu, q_sigma):
-		Ndim = q_mu.data.shape[1]
+	def forward(self, X, X_dash, q_mu, q_logsigma2):
 		reconstruction = torch.log(nn.functional.binary_cross_entropy(X_dash, X))
-		KL = 0.5 * torch.sum(1 + q_sigma.pow(2) + q_mu.pow(2) - torch.log(q_sigma.pow(2)), 1)
-		loss = -(reconstruction - KL)
+		KL = - 0.5 * torch.sum(1 + q_logsigma2 - q_mu.pow(2) - torch.exp(q_logsigma2), 1)
+		loss = -(reconstruction + KL)
+		print("****")
+		print("Reconstruction loss: {}".format(reconstruction.data[0]))
+		print("Kullback-leibler loss: {}".format(-KL.data[0]))
+
+		for p, varname in zip((q_logsigma2, q_mu, torch.exp(q_logsigma2), q_mu.pow(2)), ('logsigma2', 'q_mu', 'sigma^2', 'q_mu')):
+			print("Term loss {}: {}".format(varname, torch.sum(p)))
+
+
 		return loss
 
 
@@ -179,14 +184,23 @@ class Model(nn.Module):
 def update(X, model, loss, opt):
 
 	# Perform a forward pass
-	q_mu, q_sigma = model.encoder(X)
+	q_mu, q_logsigma2 = model.encoder(X)
 	X_dash = model(X)
-	l = torch.sum(loss(X, X_dash, q_mu, q_sigma))
+	l = torch.sum(loss(X, X_dash, q_mu, q_logsigma2))
 	print(l.data[0])
 	opt.zero_grad()
 	l.backward()
 	opt.step()
 
+
+def refresh():
+	if os.path.isdir("./reconstructed"):
+		shutil.rmtree("./reconstructed")
+	if os.path.isdir("./original"):
+		shutil.rmtree("./original")
+
+	os.mkdir("./original")
+	os.mkdir("./reconstructed")
 
 
 # TESTING
@@ -196,6 +210,7 @@ if __name__=='__main__':
 	model = Model()
 	loss = VAEloss()
 	optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+	refresh()
 	for i in range(1000):
 		X = Variable(next(iter(train_loader))[0])
 		X_dash = model(X)
