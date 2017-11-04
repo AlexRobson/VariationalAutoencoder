@@ -5,6 +5,7 @@ import os
 import torch.nn.functional as F
 from torch.autograd import Variable
 import shutil
+import numpy as np
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
@@ -68,8 +69,8 @@ class Encoder(nn.Module):
 		x = F.relu(self.fc2(x))
 		x = F.tanh(self.fc3(x))
 		x = x.view(-1, 50)
-		mu = F.tanh(self.fc4(x))
-		logsigma2 = F.tanh(self.fc5(x))
+		mu = self.fc4(x)
+		logsigma2 = self.fc5(x)
 		mu = mu.view(-1, N_LATENT)
 		logsigma2 = logsigma2.view(-1, N_LATENT)
 
@@ -97,7 +98,7 @@ class Sampler(nn.Module):
 	def forward(self, params):
 		mu, logsigma2 = params
 		# Sample from N(0, 1)
-		s = Variable(torch.normal(torch.zeros(mu.data.shape), torch.ones(mu.data.shape)))
+		s = Variable(torch.normal(torch.zeros(mu.data.shape), torch.ones(mu.data.shape)), requires_grad=False)
 		Z = mu + s * torch.exp(0.5 * logsigma2)
 		return Z
 
@@ -115,8 +116,8 @@ class Decoder(nn.Module):
 		self.fc1 = nn.Linear(N_LATENT, 400)
 		self.fc2 = nn.Linear(400, 28*28)
 
-	def forward(self, x):
-		x = F.tanh(self.fc1(x))
+	def forward(self, z):
+		x = F.relu(self.fc1(z))
 		x = F.sigmoid(self.fc2(x))
 		x = x.view(-1, 1, 28, 28)
 
@@ -140,8 +141,8 @@ class VAEloss(nn.Module):
 
 	A likelihood p(x) can be modelled by considered the image data as a series of Bernoilli trials of success (white) = p
 	and failure (black) = 1 - p. This specifies how to encoder log(p(X_i | z)). In this case, p(X_i | z) = p^y*(1-p)^(1-y).
-	The log-term of this is then the cross-entropy: y * log(p) + (1-y)*log(1-p). Y here is the correct label, i.e. X[i,j]
-	for the i, jth pixel, and p is the probability of the i,jth pixel.
+	The log-term of this is then the cross-entropy: y * log(p) + (1-y)*log(1-p)i.e. the binary-cross-entropy.
+	Y here is the correct label, i.e. X[i,j] for the i, jth pixel, and p is the probability of the i,jth pixel.
 
 	x: (N_BATCHSIZE, 28, 28)
 	x_dash = (N_BATCHSIZE, 28, 28)
@@ -156,16 +157,21 @@ class VAEloss(nn.Module):
 
 
 	def forward(self, X, X_dash, q_mu, q_logsigma2):
-		reconstruction = torch.log(nn.functional.binary_cross_entropy(X_dash, X))
-		KL = - 0.5 * torch.sum(1 + q_logsigma2 - q_mu.pow(2) - torch.exp(q_logsigma2), 1)
-		loss = -(reconstruction + KL)
+		reconstruction = nn.functional.binary_cross_entropy(X_dash, X, size_average=True)
+		KL = - 0.5 * torch.sum(1 + q_logsigma2 - q_mu.pow(2) - q_logsigma2.exp(), 1)
+		KL /= q_mu.data.shape[0] # For consistency with the binary_cross_entropy, which averages across the minibatches
+		KL /= 784 # Normalise (28*28)
+
+		loss = reconstruction + KL
 		print("****")
 		print("Reconstruction loss: {}".format(reconstruction.data[0]))
-		print("Kullback-leibler loss: {}".format(-KL.data[0]))
+		print("Kullback-leibler loss: {}".format(KL.data[0]))
 
-		for p, varname in zip((q_logsigma2, q_mu, torch.exp(q_logsigma2), q_mu.pow(2)), ('logsigma2', 'q_mu', 'sigma^2', 'q_mu')):
+		for p, varname in zip((q_logsigma2, q_mu.pow(2), q_logsigma2.exp()), ('logsigma2', 'q_mu.pow(2)', 'sigma^2')):
 			print("Term loss {}: {}".format(varname, torch.sum(p)))
 
+		if torch.lt(KL,0).data.any():
+			raise ValueError("The KL divergence is positive-definite. Calculated: {}".format(KL.data))
 
 		return loss
 
@@ -188,6 +194,8 @@ def update(X, model, loss, opt):
 	X_dash = model(X)
 	l = torch.sum(loss(X, X_dash, q_mu, q_logsigma2))
 	print(l.data[0])
+	if np.isnan(l.data[0]):
+		raise("NaN detected")
 	opt.zero_grad()
 	l.backward()
 	opt.step()
@@ -209,7 +217,7 @@ if __name__=='__main__':
 	train_loader, test_loader = vae_setup(params)
 	model = Model()
 	loss = VAEloss()
-	optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9)
+	optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9, weight_decay=1)
 	refresh()
 	for i in range(1000):
 		X = Variable(next(iter(train_loader))[0])
