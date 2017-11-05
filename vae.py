@@ -10,6 +10,7 @@ from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
 N_LATENT = 8
+debug = False
 
 
 def vae_setup(params, datadir="../"):
@@ -55,22 +56,17 @@ class Encoder(nn.Module):
 
 	def __init__(self):
 		super(Encoder, self).__init__()
-		self.fc1 = nn.Linear(28*28, 512)
-		self.fc2 = nn.Linear(512, 400)
-		self.fc3 = nn.Linear(400, 50)
-		self.fc4 = nn.Linear(50, N_LATENT)
-		self.fc5 = nn.Linear(50, N_LATENT)
+		self.fc1 = nn.Linear(28*28, 400)
+
+		self.fc4 = nn.Linear(400, N_LATENT)
+		self.fc5 = nn.Linear(400, N_LATENT)
 
 
 	def forward(self, x):
 		x = x.view(-1, 28*28)
-		x = F.relu(self.fc1(x))
-		x = x.view(-1, 512)
-		x = F.relu(self.fc2(x))
-		x = F.tanh(self.fc3(x))
-		x = x.view(-1, 50)
-		mu = self.fc4(x)
-		logsigma2 = self.fc5(x)
+		h = F.relu(self.fc1(x))
+		mu = self.fc4(h)
+		logsigma2 = self.fc5(h)
 		mu = mu.view(-1, N_LATENT)
 		logsigma2 = logsigma2.view(-1, N_LATENT)
 
@@ -158,20 +154,22 @@ class VAEloss(nn.Module):
 
 	def forward(self, X, X_dash, q_mu, q_logsigma2):
 		reconstruction = nn.functional.binary_cross_entropy(X_dash, X, size_average=True)
-		KL = - 0.5 * torch.sum(1 + q_logsigma2 - q_mu.pow(2) - q_logsigma2.exp(), 1)
-		KL /= q_mu.data.shape[0] # For consistency with the binary_cross_entropy, which averages across the minibatches
+		KL = - 0.5 * torch.sum(1 + q_logsigma2 - q_mu.pow(2) - q_logsigma2.exp(), 1) # Sum over Z dimension
+		KL /= q_mu.data.shape[0] # Consistency with binary_cross_entropy, which averages minibatches (size_average=True)
 		KL /= 784 # Normalise (28*28)
 
 		loss = reconstruction + KL
-		print("****")
-		print("Reconstruction loss: {}".format(reconstruction.data[0]))
-		print("Kullback-leibler loss: {}".format(KL.data[0]))
 
-		for p, varname in zip((q_logsigma2, q_mu.pow(2), q_logsigma2.exp()), ('logsigma2', 'q_mu.pow(2)', 'sigma^2')):
-			print("Term loss {}: {}".format(varname, torch.sum(p)))
+		if debug:
+			print("****")
+			print("Reconstruction loss: {}".format(reconstruction.data[0]))
+			print("Kullback-leibler loss: {}".format(KL.data[0]))
 
-		if torch.lt(KL,0).data.any():
-			raise ValueError("The KL divergence is positive-definite. Calculated: {}".format(KL.data))
+			for p, varname in zip((q_logsigma2, q_mu.pow(2), q_logsigma2.exp()), ('logsigma2', 'q_mu.pow(2)', 'sigma^2')):
+				print("Term loss {}: {}".format(varname, torch.sum(p)))
+
+			if torch.lt(KL,0).data.any():
+				raise ValueError("The KL divergence is positive-definite. Calculated: {}".format(KL.data))
 
 		return loss
 
@@ -193,12 +191,13 @@ def update(X, model, loss, opt):
 	q_mu, q_logsigma2 = model.encoder(X)
 	X_dash = model(X)
 	l = torch.sum(loss(X, X_dash, q_mu, q_logsigma2))
-	print(l.data[0])
-	if np.isnan(l.data[0]):
-		raise("NaN detected")
+	if debug:
+		if np.isnan(l.data[0]):
+			raise("NaN detected")
 	opt.zero_grad()
 	l.backward()
 	opt.step()
+	return l.data[0]
 
 
 def refresh():
@@ -217,12 +216,19 @@ if __name__=='__main__':
 	train_loader, test_loader = vae_setup(params)
 	model = Model()
 	loss = VAEloss()
+#	optimizer = torch.optim.Adagrad(model.parameters(), lr=1e-2, weight_decay=1)
+#	optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1)
 	optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9, weight_decay=1)
 	refresh()
-	for i in range(1000):
-		X = Variable(next(iter(train_loader))[0])
-		X_dash = model(X)
-		save_image(X.data, "./original/output_{0:0>5}.jpg".format(str(i)))
-		save_image(X_dash.data, "./reconstructed/output_{0:0>5}.jpg".format(str(i)))
-		update(X, model, loss, optimizer)
+	for epoch in range(int(5)):
+		train_loss = 0
+		for idx, (data, _) in enumerate(train_loader):
+			X = Variable(data)
+			X_dash = model(X)
+			train_loss += update(X, model, loss, optimizer)
+
+		if (epoch % 1) == 0:
+			print("{}:{}".format(epoch, train_loss / len(train_loader.dataset)))
+			save_image(X.data, "./original/output_{0:0>5}.jpg".format(str(epoch)))
+			save_image(X_dash.data, "./reconstructed/output_{0:0>5}.jpg".format(str(epoch)))
 
