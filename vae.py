@@ -9,7 +9,7 @@ import numpy as np
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
-N_LATENT = 8
+N_LATENT = 10
 debug = False
 
 
@@ -158,7 +158,7 @@ class VAEloss(nn.Module):
 		KL /= q_mu.data.shape[0] # Consistency with binary_cross_entropy, which averages minibatches (size_average=True)
 		KL /= 784 # Normalise (28*28)
 
-		loss = reconstruction + KL
+		LB = reconstruction + KL
 
 		if debug:
 			print("****")
@@ -171,7 +171,7 @@ class VAEloss(nn.Module):
 			if torch.lt(KL,0).data.any():
 				raise ValueError("The KL divergence is positive-definite. Calculated: {}".format(KL.data))
 
-		return loss
+		return LB
 
 
 class Model(nn.Module):
@@ -220,7 +220,7 @@ if __name__=='__main__':
 #	optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1)
 	optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, momentum=0.9, weight_decay=1)
 	refresh()
-	for epoch in range(int(5)):
+	for epoch in range(int(50)):
 		train_loss = 0
 		for idx, (data, _) in enumerate(train_loader):
 			X = Variable(data)
