@@ -47,7 +47,9 @@ class Encoder(nn.Module):
 
 	It is a neural network that outputs the parameters \mu (x) and \sigma (x) that represent the distribution q(z | x)
 	This is set-up as if a Normal distribution because it provides nice properties for when
-	we arrive at the loss function (squared error), and thus the output of this network is a MU and SIGMA.
+	we arrive at the loss function (squared error), and thus the output of this network is a MU and SIGMA
+	[ The Sigma is passed as the log variance as this is easier to work with. ]
+
 
 	These each have a size of BATCH_SIZE * N_LATENTS
 
@@ -75,14 +77,14 @@ class Encoder(nn.Module):
 
 class Sampler(nn.Module):
 	"""
-	This function is defined explicstly to capture the sampling involved
+	This function is defined explictly to capture the sampling involved
 	at the output of the encoder. The output of the encoder is Q(z | X). However, when
 	following through the equations in variational autoencoders, the equation that represent
 	log P(x) is built from two terms; a KullBack-Leibler distance of KL(Q(z | X) || P(z) )
 	and a second term which is the built from an expectation over E{Q_z}[log P(X | z)].
 	This stochastic layer captures this expectation, by sampling the output of Q(z | X).
 
-	The secondi mportant aspect of this layer is the reparameterisation trick. In order to
+	The second important aspect of this layer is the reparameterisation trick. In order to
 	backprop through the output of the encoder, we need to take derivatives of N(MU, SIGMA),
 	which is our estimate for Q(z | X). Therefore, we reparameterise. Instead of sampling
 	from z ~ N(MU, SIGMA) we sample from \eps ~ N(0, 1) and then: z = MU + SIGMA * eps
@@ -102,8 +104,6 @@ class Decoder(nn.Module):
 	"""
 	This function is the network decoding that represents q(z | x) back into our observable space.
 	Importantly, the input to this decoder step is a sample from ~N(MU, SIGMA),the output from the encoder.
-
-	It provides a reconstruction of the observables. Model this as a Bernouilli distribution
 
 	:return:
 	"""
@@ -143,7 +143,13 @@ class VAEloss(nn.Module):
 	x: (N_BATCHSIZE, 28, 28)
 	x_dash = (N_BATCHSIZE, 28, 28)
 
-	The derivation for this can be seen in Appendix 2 of the Dietrich paper.
+	The derivation for this can be seen in Appendix 2 of the Dietrich paper. It also follows
+	from the wikipedia article above with the Multivariate distribution being \mathcal{N}(0, 1).
+
+	This explains the reconstruction term and the first KL term in the `forward` function below.
+	The two normalisation terms of the KL (KL /= ...) follow first because of consistency with
+	how the binary cross entropy term is calculated (reduce by average over the minibatches).
+	The second term, dividing by the size of the images, is another normalisation term.
 
 	:return: loss
 	"""
@@ -231,4 +237,3 @@ if __name__=='__main__':
 			print("{}:{}".format(epoch, train_loss / len(train_loader.dataset)))
 			save_image(X.data, "./original/output_{0:0>5}.jpg".format(str(epoch)))
 			save_image(X_dash.data, "./reconstructed/output_{0:0>5}.jpg".format(str(epoch)))
-
