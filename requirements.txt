@@ -2,7 +2,7 @@ bottle==0.12.13
 CProfileV==1.0.7
 numpy==1.13.3
 olefile==0.44
-Pillow==4.3.0
+Pillow==9.0.0
 PyYAML==3.12
 six==1.11.0
 torch==0.2.0.post3
